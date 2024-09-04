@@ -272,7 +272,7 @@ def aca(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
 ###########################################
 
 # @jit(nopython=True,parallel=True)
-def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
+def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3SpecialTreatment):
     """
     ACA-GP: ACA with a geometrical pivot selection.
 
@@ -341,7 +341,7 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
     j1 = np.argmin(distances)
     dist_X_Y = np.linalg.norm(t_center - s_center)
 
-    # So i1,j1 is the first pivot.
+    # So i1,j1 form the first pivot.
     Ik[0] = i1
     Jk[0] = j1
     pivot = line_kernel(t_coord[i1], s_coord[j1], Estar, kpower)
@@ -365,7 +365,6 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
     ranks = 1
     # Main loop
     while R_norm > tol * M_norm and ranks < max_possible_rank:
-        print("ranks = ", ranks)
         max_val = 0
         x0 = np.min(s_coord[:,0])
         x1 = np.max(s_coord[:,0])
@@ -374,26 +373,30 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
 
 
         # V1
-        if ranks != 2:
-            inv_distances = np.zeros(m)
-            for i in range(m):
-                if i in Jk:
-                    inv_distances[i] = 1e30
+        inv_distances = np.zeros(m)
+        for i in range(m):
+            if i in Jk:
+                inv_distances[i] = 1e30
+            else:
+                for j in range(ranks):
+                    inv_distances[i] += len(Jk)/np.linalg.norm(s_coord[i] - s_coord[Jk[j]])
+                # if ranks != 2:
+                min_dist_x = min(np.abs(x1 - s_coord[i,0]),np.abs(x0 - s_coord[i,0]))
+                min_dist_y = min(np.abs(y1 - s_coord[i,1]),np.abs(y0 - s_coord[i,1]))
+                min_distance_to_convex_hull = min(min_dist_x, min_dist_y)
+                if min_distance_to_convex_hull == 0:
+                    inv_distances[i] += 1e30
                 else:
-                    for j in range(ranks):
-                        inv_distances[i] += len(Jk)/np.linalg.norm(s_coord[i] - s_coord[Jk[j]])
-                    # if ranks != 2:
-                    min_dist_x = min(np.abs(x1 - s_coord[i,0]),np.abs(x0 - s_coord[i,0]))
-                    min_dist_y = min(np.abs(y1 - s_coord[i,1]),np.abs(y0 - s_coord[i,1]))
-                    min_distance_to_convex_hull = min(min_dist_x, min_dist_y)
                     inv_distances[i] += 4/min_distance_to_convex_hull
-                    # else:
-                    #     inv_distances[i] += 1*dist_X_Y/np.linalg.norm(s_coord[i] - t_center)
-            j_k = np.argmin(inv_distances)
-        else:
-            # j_k = find_closest_point(s_coord, t_center, Jk)
+                # else:
+                #     inv_distances[i] += 1*dist_X_Y/np.linalg.norm(s_coord[i] - t_center)
+        j_k = np.argmin(inv_distances)
+        if Rank3SpecialTreatment and ranks == 2:
             j_k = find_average_point(s_coord, t_center, Jk)
-            print("ranks = ", ranks, ", j_k = ", j_k)
+            # j_k = find_closest_point(s_coord, t_center, Jk)
+            # j_k = np.random.randint(0, m)
+            # while j_k in Jk:
+            #     j_k = np.random.randint(0, m)
 
         # V2
         # distances = np.zeros(m)
@@ -463,6 +466,250 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
     V_contiguous = np.ascontiguousarray(V[:ranks, :])
 
     return U_contiguous, V_contiguous, R_norm/M_norm, ranks, Jk, Ik, history
+
+
+###########################################
+##   BO TMP ACA-GP V2                    ##
+###########################################
+def aca_gp_v2(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
+    """
+    ACA-GP: ACA with a geometrical pivot selection.
+
+    Args:
+        t_coord (numpy.ndarray): The target cloud of points.
+        s_coord (numpy.ndarray): The source cloud of points.
+        Estar (float): The kernel/Green function parameter.
+        tol (float): The tolerance for the ACA algorithm.
+        max_rank (int): The maximum rank of the ACA algorithm.
+        min_pivot (float): The minimum tolerable value of the pivot.
+
+    Returns:
+        U_contiguous, V_contiguous (numpy.ndarray): The U and V matrices of the ACA algorithm which decompose the matrix A as U @ V.
+        R_norm/M_norm (float): The ratio of the residual norm to the approximate matrix norm.
+        ranks (int): The rank of the approximate decomposition.
+        Jk (numpy.ndarray): The indices of the columns of the source cloud of points.
+        Ik (numpy.ndarray): The indices of the rows of the target cloud of points.
+        history (numpy.ndarray): includes the residual norm, the approximate matrix norm, the ratio of the residual norm to the approximate matrix norm, and the pivot value.
+    """
+    # Initialization
+    pivot_tol = min_pivot
+    max_possible_rank = max_rank
+    n = t_coord.shape[0]
+    m = s_coord.shape[0]
+    U = np.zeros((n, max_possible_rank), dtype=np.float64)
+    V = np.zeros((max_possible_rank, m), dtype=np.float64)
+    ranks = 0
+    R_norm = float64(1.)
+    M_norm = float64(1.)
+    delta_M = float64(0.)
+    Jk = np.zeros(max_possible_rank, dtype=np.int32)
+    Ik = np.zeros(max_possible_rank, dtype=np.int32)
+    history = np.zeros((max_possible_rank, 4), dtype=np.float64)
+
+    # # Start algorithm
+    # # 1. Find center of t_coord, O(n)
+    # t_center = np.mean(t_coord, axis=0)
+    # # 2. Find the closes point from s_coord to the center of t_coord, O(m)
+    # # 2.1 Compute distances from all s_coord points to t_center
+    # distances = np.linalg.norm(s_coord - t_center, axis=1)
+    # # 2.2 Find the index of the minimum distance
+    # j1 = np.argmin(distances)
+    # min_dist = distances[j1]
+    # # 3. Find the closest point from t_coord to the point found in step 2, O(n)
+    # distances = np.linalg.norm(t_coord - s_coord[j1], axis=1)
+    # i1 = np.argmin(distances)
+    # min_dist = np.min([min_dist, distances[i1]])
+    # min_dist0 = min_dist
+    # # # 3.b Find the closest point from s_coord to the point found in step 3, O(m)
+    # # distances = np.linalg.norm(s_coord - t_coord[i1], axis=1)
+    # # j1 = np.argmin(distances)
+    # # min_dist = np.min([min_dist, distances[j1]])
+
+    # Alternative start algorithm // That is much better!!!
+    # 1. Find center of t_coord, O(n)
+    t_center = np.mean(t_coord, axis=0)
+    # 2. Find the closes point from t_coord to the center of t_coord, O(n)
+    distances = np.linalg.norm(t_coord - t_center, axis=1)
+    # 2.1 Find the index of the minimum distance
+    i1 = np.argmin(distances)
+    # 3. Find the center of s_coord, O(m)
+    s_center = np.mean(s_coord, axis=0)
+    # 4. Find the closest point from s_coord to the center of s_coord, O(m)
+    distances = np.linalg.norm(s_coord - s_center, axis=1)
+    # 4.1 Find the index of the minimum distance
+    j1 = np.argmin(distances)
+    dist_X_Y = np.linalg.norm(t_center - s_center)
+
+    # So i1,j1 form the first pivot.
+    Ik[0] = i1
+    Jk[0] = j1
+    pivot = line_kernel(t_coord[i1], s_coord[j1], Estar, kpower)
+    if abs(pivot) < pivot_tol:
+        print("Warning: Pivot is too small: ", pivot, ", stop at rank = ", ranks)
+        return U, V, 0., ranks, Jk, Ik, history
+        # raise ValueError("Pivot is too small: " +str(pivot))
+    sign_pivot = np.sign(pivot)
+    sqrt_pivot = np.sqrt(np.abs(pivot))
+    # 4. Evaluate the associated row and column of the matrix
+    u1 = line_kernel(t_coord, s_coord[j1], Estar, kpower)
+    v1 = line_kernel(t_coord[i1], s_coord, Estar, kpower)
+    U[:, 0] = sign_pivot * u1 / sqrt_pivot
+    V[0, :] = v1 / sqrt_pivot
+
+    # Compute matrix norm
+    R_norm = frobenius_norm(u1) * frobenius_norm(v1) / np.abs(pivot)
+    M_norm = R_norm 
+    history[0] = np.array([R_norm, M_norm, R_norm/M_norm, pivot])
+
+    ranks = 1
+    # Main loop
+    while R_norm > tol * M_norm and ranks < max_possible_rank:
+        max_val = 0
+        x0 = np.min(s_coord[:,0])
+        x1 = np.max(s_coord[:,0])
+        y0 = np.min(s_coord[:,1])
+        y1 = np.max(s_coord[:,1])
+
+
+        # V1
+        if True:
+            inv_distances = np.zeros(m)
+            for i in range(m):
+                if i in Jk:
+                    inv_distances[i] = 1e30
+                else:
+                    for j in range(ranks):
+                        inv_distances[i] += len(Jk)/np.linalg.norm(s_coord[i] - s_coord[Jk[j]])
+                    # if ranks != 2:
+                    min_dist_x = min(np.abs(x1 - s_coord[i,0]),np.abs(x0 - s_coord[i,0]))
+                    min_dist_y = min(np.abs(y1 - s_coord[i,1]),np.abs(y0 - s_coord[i,1]))
+                    min_distance_to_convex_hull = min(min_dist_x, min_dist_y)
+                    if min_distance_to_convex_hull == 0:
+                        inv_distances[i] += 1e30
+                    else:
+                        inv_distances[i] += 4/min_distance_to_convex_hull
+                    # else:
+                    #     inv_distances[i] += 1*dist_X_Y/np.linalg.norm(s_coord[i] - t_center)
+            j_k = np.argmin(inv_distances)
+        else:
+            j_k = find_average_point(s_coord, t_center, Jk)
+
+        # Extra adjustment for the choice of j_k: select the best approximation
+        if ranks == 2:
+            # For trial 1   
+            j_k_trial_1 = j_k
+            u_k_trial_1 = line_kernel(t_coord, s_coord[j_k_trial_1], Estar, kpower)
+            for i in range(ranks):
+                for j in range(n):
+                    u_k_trial_1[j] -= U[j, i] * V[i, j_k_trial_1]        
+
+            _, i_k_trial_1 = find_max_vector_element(u_k_trial_1, Ik)
+            v_k_trial_1 = line_kernel(t_coord[i_k_trial_1], s_coord, Estar, kpower)
+            for i in range(m):
+                for j in range(ranks):
+                    v_k_trial_1[i] -= U[i_k_trial_1, j] * V[j, i]
+
+            pivot = u_k_trial_1[i_k_trial_1]
+            sign_pivot = np.sign(pivot)
+            sqrt_pivot = np.sqrt(np.abs(pivot))
+            R1 = frobenius_norm(u_k_trial_1) * frobenius_norm(v_k_trial_1) / np.abs(pivot) 
+
+            # For trial 2
+            j_k_trial_2 = find_average_point(s_coord, t_center, Jk)
+            u_k_trial_2 = line_kernel(t_coord, s_coord[j_k_trial_2], Estar, kpower)
+            for i in range(ranks):
+                for j in range(n):
+                    u_k_trial_2[j] -= U[j, i] * V[i, j_k_trial_2]
+
+            _, i_k_trial_2 = find_max_vector_element(u_k_trial_2, Ik)
+            v_k_trial_2 = line_kernel(t_coord[i_k_trial_2], s_coord, Estar, kpower)
+            for i in range(m):
+                for j in range(ranks):
+                    v_k_trial_2[i] -= U[i_k_trial_2, j] * V[j, i]
+
+            pivot2 = u_k_trial_2[i_k_trial_2]
+            sign_pivot2 = np.sign(pivot2)
+            sqrt_pivot2 = np.sqrt(np.abs(pivot2))
+            R2 = frobenius_norm(u_k_trial_2) * frobenius_norm(v_k_trial_2) / np.abs(pivot2)
+
+            print("R1 = {0:.2e}, R2 = {1:.2e}".format(R1, R2))
+            if pivot < pivot2:
+                j_k = j_k_trial_1
+                i_k = i_k_trial_1
+                Jk[ranks] = j_k
+                Ik[ranks] = i_k
+                u_k = u_k_trial_1
+                v_k = v_k_trial_1
+                R_norm = R1
+            else:
+                j_k = j_k_trial_2
+                i_k = i_k_trial_2
+                Jk[ranks] = j_k
+                Ik[ranks] = i_k
+                u_k = u_k_trial_2
+                v_k = v_k_trial_2
+                R_norm = R2
+                pivot = pivot2
+                sign_pivot = sign_pivot2
+                sqrt_pivot = sqrt_pivot2
+
+
+        else:
+            Jk[ranks] = j_k
+            u_k = line_kernel(t_coord, s_coord[j_k], Estar, kpower)
+            for i in range(ranks):
+                for j in range(n):
+                    u_k[j] -= U[j, i] * V[i, j_k]        
+
+            _, i_k = find_max_vector_element(u_k, Ik)
+            Ik[ranks] = i_k
+            v_k = line_kernel(t_coord[i_k], s_coord, Estar, kpower)
+            for i in range(m):
+                for j in range(ranks):
+                    v_k[i] -= U[i_k, j] * V[j, i]
+
+
+            pivot = u_k[i_k]
+            if abs(pivot) < pivot_tol:
+                print("ACA-GP: Warning: Pivot is too small: ", pivot, ", stop at rank = ", ranks)
+                return U, V, 0., ranks, Jk, Ik, history
+                # raise ValueError("Pivot is too small: " +str(pivot))
+            sign_pivot = np.sign(pivot)
+            sqrt_pivot = np.sqrt(np.abs(pivot))
+
+            # Compute residual norm
+            u_k_norm = frobenius_norm(u_k)
+            v_k_norm = frobenius_norm(v_k)
+            R_norm = float64(u_k_norm * v_k_norm / np.abs(pivot))
+        # EO Extra adjustment for the choice of j_k (for k == 2): select the best approximation
+
+        U[:, ranks] = u_k * sign_pivot / sqrt_pivot
+        V[ranks, :] = v_k / sqrt_pivot
+
+        # Approximate matrix norm
+        cross_term = 2 * np.dot(np.dot(U[:,:ranks].T, u_k), np.dot(v_k, V[:ranks,:].T)) / pivot
+        M_norm = float64(np.sqrt(M_norm**2 + R_norm**2 + cross_term))
+
+        # Increment the rank
+        ranks += 1
+        # Compute real norm of the approximate matrix
+        # M_real_norm = np.linalg.norm(U[:, :ranks] @ V[:ranks, :], "fro")
+        history[ranks-1] = np.array([R_norm, M_norm, R_norm/M_norm, pivot]) #M_real_norm])
+
+    # plt.show()
+    U_contiguous = np.ascontiguousarray(U[:, :ranks])
+    V_contiguous = np.ascontiguousarray(V[:ranks, :])
+
+    return U_contiguous, V_contiguous, R_norm/M_norm, ranks, Jk, Ik, history
+
+###########################################
+##   BO TMP ACA-GP V3                    ##
+###########################################
+
+
+
+
+
 
 def pca_ca(t_coord, s_coord, Estar, tol, rank, kpower):
     # Check that the rank is a power of two using a bitwise AND operation

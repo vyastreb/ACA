@@ -49,6 +49,7 @@ class MainConfig:
         target_distance_tol (float):    Tolerance for the distance between the clouds
         max_rank (int):                 Maximum rank for the ACA-GP/ACA algorithm
         kernel_decay (int):             The exponent (k>0) of the power-law decay of the kernel 1/x^k
+        rank3treatment (bool):          Ad hoc procedure to handle rank 3 approximation in a special way
         E (float):                      The kernel factor
         tol (float):                    Tolerance for the ACA-GP/ACA algorithm
         min_pivot (float):              Minimum value for the pivot in the ACA-GP/ACA algorithm
@@ -64,12 +65,13 @@ class MainConfig:
     """
     N: int                      = validate_field('N',                   200,            lambda x: x > 0)
     M: int                      = validate_field('M',                   300,            lambda x: x > 0)
-    xi: float                   = validate_field('xi',                  0.5,            lambda x: 0 < x < 1)
+    xi: float                   = validate_field('xi',                  0.5,            lambda x: 0 < x <= 1.)
     Ntry: int                   = validate_field('Ntry',                1,              lambda x: x > 0)
     target_distance: float      = validate_field('target_distance',     1.5,            lambda x: x > 0.5)
     target_distance_tol: float  = validate_field('target_distance_tol', 0.1,            lambda x: x > 0)
     max_rank: int               = validate_field('max_rank',            15,             lambda x: x > 0)
     kernel_decay: int           = validate_field('kernel_decay',        1,              lambda x: x > 0)
+    rank3treatment: bool        = validate_field('rank3treatment',      False,          lambda x: isinstance(x, bool))
     E: float                    = validate_field('E',                   1e3,            lambda x: x > 0)
     tol: float                  = validate_field('tol',                 1e-20,          lambda x: 0 < x < 0.1)
     min_pivot: float            = validate_field('min_pivot',           1e-20,          lambda x: 0 < x < 0.1)
@@ -264,7 +266,7 @@ def performance_test(config: MainConfig):
         ax.add_patch(rect3)
 
         plt.legend()
-        plt.show()
+        # plt.show()
     # Potentially not needed
     # mean_t_coord = np.mean(t_coord,axis=0)
     # mean_s_coord = np.mean(s_coord,axis=0)
@@ -277,7 +279,7 @@ def performance_test(config: MainConfig):
     norm_full_matrix = np.linalg.norm(full_matrix,"fro")
 
     # Compute the ACA-GP approximation
-    U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay)
+    U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay, config.rank3treatment)
     # Compute the ACA approximation for comparison purposes
     Uc,Vc,_,rankc,_,_,_ = aca.aca(   t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay)
     rank = min(rank,rankc)
@@ -321,6 +323,8 @@ def main(config: MainConfig):
         ACA.append(aca_error)
         ACA_GP.append(aca_gp_error)
         SVD.append(svd_error)
+        if (i+1) % 10 == 0:
+            print("/ Completed {0:3d} out of {1:3d} trials".format(i+1,config.Ntry))
 
     # uniformize list lengths by padding
     max_length = max(len(arr) for arr in ACA)
@@ -328,7 +332,7 @@ def main(config: MainConfig):
         if len(ACA[i]) < max_length:
             ACA[i] = np.pad(ACA[i], (0, max_length - len(ACA[i])), 'constant')
             ACA_GP[i] = np.pad(ACA_GP[i], (0, max_length - len(ACA_GP[i])), 'constant')
-            if ifSVD:
+            if config.ifSVD:
                 SVD[i] = np.pad(SVD[i], (0, max_length - len(SVD[i])), 'constant')
 
     DIST = np.array(DIST)
@@ -336,7 +340,7 @@ def main(config: MainConfig):
     ACA_GP = np.array(ACA_GP)
 
     unique_id = str(uuid.uuid4())[:8]
-    filename = config.filename_prefix + f"_Dist_{config.target_distance}_distribution_{config.distribution_type}_ID_{unique_id}.npz"
+    filename = config.filename_prefix + f"_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}.npz"
 
     if config.ifSVD:
         SVD = np.array(SVD)
@@ -399,8 +403,8 @@ def main(config: MainConfig):
             plt.plot(ranks,10**mean_SVD_log,"o-",markersize=5, markeredgewidth=0.5, color="b", markeredgecolor='k',label="SVD")
 
         plt.legend()
-        plt.show()
-        figure_name = f"ACA_GP_error_Dist_{config.target_distance}_distribution_{config.distribution_type}_ID_{unique_id}"
+        # plt.show()
+        figure_name = f"ACA_GP_error_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}"
         fig.savefig(figure_name+".pdf")
         fig.savefig(figure_name+".pgf")
 
@@ -412,20 +416,23 @@ def main(config: MainConfig):
         plt.grid()
         plt.title("Distance = {0:.2f}".format(config.target_distance))
         plt.xlim(1,max_length)
-        plt.ylim(1,3)
         plt.ylabel(r"Accuracy factor, $E_{\mathrm{ACA}}/E_{\mathrm{ACA-GP}}$")
         plt.xlabel("Approximation rank, $k$")
         # plt.yscale("log")
 
         ratio = 10**(mean_ACA_log-mean_ACA_GP_log)
+        plt.ylim(0,1.1*np.max(ratio))
 
         # Plotting
         # plt.fill_between(ranks, lower_bound/10**mean_ACA_GP_log, upper_bound/10**mean_ACA_GP_log, color="r", alpha=0.2)
-        plt.plot(ranks, ratio, "o-", markersize=5, color="r", markeredgewidth=0.5, markeredgecolor='k', label="ACA+")
+        plt.plot(ranks, ratio, "o-", markersize=5, color="r", markeredgewidth=0.5, markeredgecolor='k', label="ACA-GP accuracy gain wrt ACA")
+        average = np.mean(ratio)
+        plt.axhline(y=average, color='#660000', linestyle='--', label=f"Average accuracy gain: {average:.2f}")
+        plt.axhline(y=1, color='k', linestyle='-', label="Equivalent accuracy")
 
         plt.legend()
-        plt.show()
-        figure_name = f"ACA_GP_accuracy_gain_Dist_{config.target_distance}_distribution_{config.distribution_type}_ID_{unique_id}"
+        # plt.show()
+        figure_name = f"ACA_GP_accuracy_gain_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}"
         fig.savefig(figure_name+".pdf")
         fig.savefig(figure_name+".pgf")
 
@@ -446,20 +453,25 @@ if __name__ == "__main__":
     seed = int(sys.argv[1])
     np.random.seed(seed)
 
-    Target_distances = [1.7] #[1, 1.5, 2, 2.5, 3]
+    Target_distances = [1.5, 2, 2.5, 5] #[1, 1.5, 2, 2.5, 5]
+    Xi = [0.25, 0.5] #0.25, 0.5, 1]
     for tdist in Target_distances:
-        try:
-            config = MainConfig(
-                N=200, M=300, xi=0.5, Ntry=10,
-                target_distance = tdist,
-                target_distance_tol = 0.1,
-                max_rank=15, E=1e3, 
-                tol = 1e-20, min_pivot=1e-20,
-                sigma=1., distribution_type="uniform",
-                ifSVD=True, Plot=True,
-                filename_prefix="ACA_GP_data"
-            )
-        except ValueError as e:
-            print(f"Input validation failed: {e}")
+        for xi_ in Xi:
+            for rank3treatment_ in [True, False]:
+                try:
+                    print("Running with parameters: ", tdist, xi_, rank3treatment_)
+                    config = MainConfig(
+                        N=200, M=300, xi=xi_, Ntry=500,
+                        target_distance = tdist,
+                        target_distance_tol = 0.1, max_rank=15, 
+                        kernel_decay=1, rank3treatment=rank3treatment_,
+                        E=1e3, tol = 1e-20, min_pivot=1e-20,
+                        sigma=1., distribution_type="uniform",
+                        ifSVD=True, Plot_cloud=False, Plot=True,
+                        filename_prefix="ACA_GP_data"
+                    )
+                except ValueError as e:
+                    print(f"Input validation failed: {e}")
+                    exit(1)
 
-        main(config)
+                main(config)
