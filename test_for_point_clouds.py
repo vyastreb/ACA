@@ -407,6 +407,7 @@ def main(config: MainConfig):
         figure_name = f"ACA_GP_error_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}"
         fig.savefig(figure_name+".pdf")
         fig.savefig(figure_name+".pgf")
+        plt.close()
 
         # Plot accuracy gain of ACA-GP over ACA
         fig,ax = plt.subplots(1,1,figsize=(5,3.5))
@@ -435,6 +436,7 @@ def main(config: MainConfig):
         figure_name = f"ACA_GP_accuracy_gain_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}"
         fig.savefig(figure_name+".pdf")
         fig.savefig(figure_name+".pgf")
+        plt.close()
 
 if __name__ == "__main__":
     """
@@ -453,8 +455,8 @@ if __name__ == "__main__":
     seed = int(sys.argv[1])
     np.random.seed(seed)
 
-    Target_distances = [1.5, 2, 2.5, 5] #[1, 1.5, 2, 2.5, 5]
-    Xi = [0.25, 0.5] #0.25, 0.5, 1]
+    Target_distances = [1, 1.5, 2, 2.5, 5]
+    Xi = [0.25, 0.5, 1]
     for tdist in Target_distances:
         for xi_ in Xi:
             for rank3treatment_ in [True, False]:
