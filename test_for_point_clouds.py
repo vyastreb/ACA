@@ -24,7 +24,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 from scipy.spatial import cKDTree
 import uuid
 import json
@@ -42,45 +42,47 @@ def validate_field(name: str, default_value: Any, validator: Callable[[Any], boo
 class MainConfig:
     """
     Parameters:
-        N,M (int):                      Number of points in the target and source clouds
-        xi (float):                     Aspect ratio of the target cloud (rectangular area)
-        Ntry (int):                     Number of trials to get statistics on the error
-        target_distance (float):        Target (true) distance between the clouds
-        target_distance_tol (float):    Tolerance for the distance between the clouds
-        max_rank (int):                 Maximum rank for the ACA-GP/ACA algorithm
-        kernel_decay (int):             The exponent (k>0) of the power-law decay of the kernel 1/x^k
-        rank3treatment (bool):          Ad hoc procedure to handle rank 3 approximation in a special way
-        E (float):                      The kernel factor
-        tol (float):                    Tolerance for the ACA-GP/ACA algorithm
-        min_pivot (float):              Minimum value for the pivot in the ACA-GP/ACA algorithm
-        sigma (float):                  Standard deviation for the normal distribution of points if "normal" distribution is chosen
-        distribution_type (str):        A "Uniform" or "normal" distribution of points
-        ifSVD (bool):                   If True, compute the SVD approximation
-        Plot_cloud (bool):              If True, plot the clouds of points (for testing needs)
-        Plot (bool):                    If True, plot results including clouds of points (for testing needs)
-        filename_prefix (str):          Prefix of the filename to save the results (complemented with parameters)
+        N,M (int):                              Number of points in the target and source clouds
+        xi (float):                             Aspect ratio of the target cloud (rectangular area)
+        Ntry (int):                             Number of trials to get statistics on the error
+        target_distance (float):                Target (true) distance between the clouds
+        target_distance_tol (float):            Tolerance for the distance between the clouds
+        max_rank (int):                         Maximum rank for the ACA-GP/ACA algorithm
+        kernel_decay (int):                     The exponent (k>0) of the power-law decay of the kernel 1/x^k
+        rank3treatment (bool):                  Ad hoc procedure to handle rank 3 approximation in a special way
+        convex_hull_dist (Tuple[str,float]):    Type and value of the factor to multiply the distance to the convex hull in pivot selection : ("const",1) or ("linear",1)
+        E (float):                              The kernel factor
+        tol (float):                            Tolerance for the ACA-GP/ACA algorithm
+        min_pivot (float):                      Minimum value for the pivot in the ACA-GP/ACA algorithm
+        sigma (float):                          Standard deviation for the normal distribution of points if "normal" distribution is chosen
+        distribution_type (str):                A "Uniform" or "normal" distribution of points
+        ifSVD (bool):                           If True, compute the SVD approximation
+        Plot_cloud (bool):                      If True, plot the clouds of points (for testing needs)
+        Plot (bool):                            If True, plot results including clouds of points (for testing needs)
+        filename_prefix (str):                  Prefix of the filename to save the results (complemented with parameters)
 
     Comment:
         Using field ensures that these variables cannot be changed (similar to const in C++ or frozen in Python)
     """
-    N: int                      = validate_field('N',                   200,            lambda x: x > 0)
-    M: int                      = validate_field('M',                   300,            lambda x: x > 0)
-    xi: float                   = validate_field('xi',                  0.5,            lambda x: 0 < x <= 1.)
-    Ntry: int                   = validate_field('Ntry',                1,              lambda x: x > 0)
-    target_distance: float      = validate_field('target_distance',     1.5,            lambda x: x > 0.5)
-    target_distance_tol: float  = validate_field('target_distance_tol', 0.1,            lambda x: x > 0)
-    max_rank: int               = validate_field('max_rank',            15,             lambda x: x > 0)
-    kernel_decay: int           = validate_field('kernel_decay',        1,              lambda x: x > 0)
-    rank3treatment: bool        = validate_field('rank3treatment',      False,          lambda x: isinstance(x, bool))
-    E: float                    = validate_field('E',                   1e3,            lambda x: x > 0)
-    tol: float                  = validate_field('tol',                 1e-20,          lambda x: 0 < x < 0.1)
-    min_pivot: float            = validate_field('min_pivot',           1e-20,          lambda x: 0 < x < 0.1)
-    sigma: float                =  validate_field('sigma',              1.,             lambda x: x > 0)
-    distribution_type: str      = validate_field('distribution_type',   "uniform",      lambda x: x in ["uniform", "normal"])
-    ifSVD: bool                 = validate_field('ifSVD',               False,          lambda x: isinstance(x, bool))
-    Plot_cloud:bool             = validate_field('Plot_cloud',          False,          lambda x: isinstance(x, bool))
-    Plot: bool                  = validate_field('Plot',                False,          lambda x: isinstance(x, bool))
-    filename_prefix: str        = validate_field('filename_prefix',     "ACA_GP_data",  lambda x: isinstance(x, str))
+    N: int                              = validate_field('N',                       200,            lambda x: x > 0)
+    M: int                              = validate_field('M',                       300,            lambda x: x > 0)
+    xi: float                           = validate_field('xi',                      0.5,            lambda x: 0 < x <= 1.)
+    Ntry: int                           = validate_field('Ntry',                    1,              lambda x: x > 0)
+    target_distance: float              = validate_field('target_distance',         1.5,            lambda x: x > 0.5)
+    target_distance_tol: float          = validate_field('target_distance_tol',     0.1,            lambda x: x > 0)
+    max_rank: int                       = validate_field('max_rank',                15,             lambda x: x > 0)
+    kernel_decay: int                   = validate_field('kernel_decay',            1,              lambda x: x > 0)
+    rank3treatment: bool                = validate_field('rank3treatment',          False,          lambda x: isinstance(x, bool))
+    convex_hull_dist: Tuple[str,float]  = validate_field('convex_hull_dist',       ("const",1),     lambda x: isinstance(x, tuple) and len(x) == 2 and isinstance(x[0], str) and isinstance(x[1], (int, float))
+    E: float                            = validate_field('E',                       1e3,            lambda x: x > 0)
+    tol: float                          = validate_field('tol',                     1e-20,          lambda x: 0 < x < 0.1)
+    min_pivot: float                    = validate_field('min_pivot',               1e-20,          lambda x: 0 < x < 0.1)
+    sigma: float                        = validate_field('sigma',                   1.,             lambda x: x > 0)
+    distribution_type: str              = validate_field('distribution_type',       "uniform",      lambda x: x in ["uniform", "normal"])
+    ifSVD: bool                         = validate_field('ifSVD',                   False,          lambda x: isinstance(x, bool))
+    Plot_cloud:bool                     = validate_field('Plot_cloud',              False,          lambda x: isinstance(x, bool))
+    Plot: bool                          = validate_field('Plot',                    False,          lambda x: isinstance(x, bool))
+    filename_prefix: str                = validate_field('filename_prefix',         "ACA_GP_data",  lambda x: isinstance(x, str))
 
     def __post_init__(self):
         for field_name, field_value in self.__dataclass_fields__.items():
@@ -92,6 +94,10 @@ class MainConfig:
         # Additional validation for relative values
         if self.target_distance - self.target_distance_tol < 0.5:
             raise ValueError(f"target_distance_tol ({self.dist_factor}) must be smaller than 0.5 - target_distance ({0.5-self.target_distance})")
+        if self.convex_hull_dist[0] not in ["const", "linear"]:
+            raise ValueError(f"Invalid type of convex_hull_dist: {self.convex_hull_dist[0]}")
+        if self.convex_hull_dist[1] <= 0:
+            raise ValueError(f"Invalid value for convex_hull_dist: {self.convex_hull_dist[1]}")
 
     def get_json(self):
         return {field_name: getattr(self, field_name) for field_name in self.__dataclass_fields__.keys()}
@@ -279,7 +285,7 @@ def performance_test(config: MainConfig):
     norm_full_matrix = np.linalg.norm(full_matrix,"fro")
 
     # Compute the ACA-GP approximation
-    U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay, config.rank3treatment)
+    U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay, config.rank3treatment, config.convex_hull_dist)
     # Compute the ACA approximation for comparison purposes
     Uc,Vc,_,rankc,_,_,_ = aca.aca(   t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay)
     rank = min(rank,rankc)
@@ -404,7 +410,7 @@ def main(config: MainConfig):
 
         plt.legend()
         # plt.show()
-        figure_name = f"ACA_GP_error_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}"
+        figure_name = f"ACA_GP_error_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_convexhull_{config.convex_hull_dist[0]}_factor_{config.convex_hull_dist[1]}_ID_{unique_id}"
         fig.savefig(figure_name+".pdf")
         fig.savefig(figure_name+".pgf")
         plt.close()
@@ -415,14 +421,16 @@ def main(config: MainConfig):
         tics = ranks
         ax.set_xticks(tics)
         plt.grid()
-        plt.title("Distance = {0:.2f}".format(config.target_distance))
+        plt.title("Distance = {0:.2f}, convex hull ({1}) factor = {2:.0f}".format(\
+            config.target_distance, config.convex_hull_dist[0], config.convex_hull_dist[1]))
         plt.xlim(1,max_length)
         plt.ylabel(r"Accuracy factor, $E_{\mathrm{ACA}}/E_{\mathrm{ACA-GP}}$")
         plt.xlabel("Approximation rank, $k$")
         # plt.yscale("log")
 
         ratio = 10**(mean_ACA_log-mean_ACA_GP_log)
-        plt.ylim(0,1.1*np.max(ratio))
+        # plt.ylim(0,1.1*np.max(ratio))
+        plt.ylim(0,4)
 
         # Plotting
         # plt.fill_between(ranks, lower_bound/10**mean_ACA_GP_log, upper_bound/10**mean_ACA_GP_log, color="r", alpha=0.2)
@@ -433,7 +441,7 @@ def main(config: MainConfig):
 
         plt.legend()
         # plt.show()
-        figure_name = f"ACA_GP_accuracy_gain_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_ID_{unique_id}"
+        figure_name = f"ACA_GP_accuracy_gain_Dist_{config.target_distance}_distribution_{config.distribution_type}_xi_{config.xi}_convexhull_{config.convex_hull_dist[0]}_factor_{config.convex_hull_dist[1]}_ID_{unique_id}"
         fig.savefig(figure_name+".pdf")
         fig.savefig(figure_name+".pgf")
         plt.close()
@@ -457,23 +465,57 @@ if __name__ == "__main__":
 
     Target_distances = [1, 1.5, 2, 2.5, 5]
     Xi = [0.25, 0.5, 1]
+    Convex_hull_distance_factors = [1] #, 2, 3, 4] #, 5, 6, 7, 8]
     for tdist in Target_distances:
         for xi_ in Xi:
             for rank3treatment_ in [True, False]:
-                try:
-                    print("Running with parameters: ", tdist, xi_, rank3treatment_)
-                    config = MainConfig(
-                        N=200, M=300, xi=xi_, Ntry=500,
-                        target_distance = tdist,
-                        target_distance_tol = 0.1, max_rank=15, 
-                        kernel_decay=1, rank3treatment=rank3treatment_,
-                        E=1e3, tol = 1e-20, min_pivot=1e-20,
-                        sigma=1., distribution_type="uniform",
-                        ifSVD=True, Plot_cloud=False, Plot=True,
-                        filename_prefix="ACA_GP_data"
-                    )
-                except ValueError as e:
-                    print(f"Input validation failed: {e}")
-                    exit(1)
+                for ch_dist in Convex_hull_distance_factors:
+                    try:
+                        print("Running with parameters: ", tdist, xi_, rank3treatment_)
+                        config = MainConfig(
+                            N=200, M=300, xi=xi_, Ntry=500,
+                            target_distance = tdist,
+                            target_distance_tol = 0.1, max_rank=15, 
+                            kernel_decay=1, rank3treatment=rank3treatment_,
+                            convex_hull_dist=("const",ch_dist),
+                            E=1e3, tol = 1e-20, min_pivot=1e-20,
+                            sigma=1., distribution_type="uniform",
+                            # FIXME: ifSVD should be True
+                            ifSVD=False, Plot_cloud=False, Plot=False,
+                            filename_prefix="ACA_GP_data"
+                        )
+                    except ValueError as e:
+                        print(f"Input validation failed: {e}")
+                        exit(1)
 
-                main(config)
+                    main(config)
+
+
+
+    # # Target_distances = [1, 1.5, 2, 2.5, 5]
+    # # Xi = [0.25, 0.5, 1]
+    # Target_distances = [1.5]
+    # Xi = [0.25]
+    # Convex_hull_distance_factors = [1, 2, 3, 4] #, 5, 6, 7, 8]
+    # for tdist in Target_distances:
+    #     for xi_ in Xi:
+    #         for rank3treatment_ in [True]: #[True, False]:
+    #             for ch_dist in Convex_hull_distance_factors:
+    #                 try:
+    #                     print("Running with parameters: ", tdist, xi_, rank3treatment_)
+    #                     config = MainConfig(
+    #                         N=200, M=300, xi=xi_, Ntry=200,
+    #                         target_distance = tdist,
+    #                         target_distance_tol = 0.1, max_rank=15, 
+    #                         kernel_decay=1, rank3treatment=rank3treatment_,
+    #                         convex_hull_dist_factor=ch_dist,
+    #                         E=1e3, tol = 1e-20, min_pivot=1e-20,
+    #                         sigma=1., distribution_type="uniform",
+    #                         ifSVD=False, Plot_cloud=False, Plot=True,
+    #                         filename_prefix="ACA_GP_data"
+    #                     )
+    #                 except ValueError as e:
+    #                     print(f"Input validation failed: {e}")
+    #                     exit(1)
+
+    #                 main(config)

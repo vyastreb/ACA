@@ -272,7 +272,7 @@ def aca(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
 ###########################################
 
 # @jit(nopython=True,parallel=True)
-def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3SpecialTreatment):
+def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3SpecialTreatment, convex_hull_distance):
     """
     ACA-GP: ACA with a geometrical pivot selection.
 
@@ -380,19 +380,22 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3Speci
             else:
                 for j in range(ranks):
                     inv_distances[i] += len(Jk)/np.linalg.norm(s_coord[i] - s_coord[Jk[j]])
-                # if ranks != 2:
                 min_dist_x = min(np.abs(x1 - s_coord[i,0]),np.abs(x0 - s_coord[i,0]))
                 min_dist_y = min(np.abs(y1 - s_coord[i,1]),np.abs(y0 - s_coord[i,1]))
                 min_distance_to_convex_hull = min(min_dist_x, min_dist_y)
                 if min_distance_to_convex_hull == 0:
                     inv_distances[i] += 1e30
                 else:
-                    inv_distances[i] += 4/min_distance_to_convex_hull
+                    if convex_hull_distance[0] == "const":
+                        inv_distances[i] += convex_hull_distance[1]/min_distance_to_convex_hull
+                    elif convex_hull_distance[0] == "linear":
+                        inv_distances[i] += convex_hull_distance[1]*(ranks)/min_distance_to_convex_hull # Note that ranks = k-1
                 # else:
                 #     inv_distances[i] += 1*dist_X_Y/np.linalg.norm(s_coord[i] - t_center)
         j_k = np.argmin(inv_distances)
         if Rank3SpecialTreatment and ranks == 2:
             j_k = find_average_point(s_coord, t_center, Jk)
+            
             # j_k = find_closest_point(s_coord, t_center, Jk)
             # j_k = np.random.randint(0, m)
             # while j_k in Jk:

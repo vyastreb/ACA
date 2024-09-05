@@ -32,7 +32,7 @@ t_coord = np.random.rand(N, 2)
 s_coord = np.random.rand(M, 2)
 t_coord += np.array([1.5,0])
 
-# Uncomment the following lines to use a fixed seed
+# Uncomment the two following lines to use a fixed seed
 # seed = 124
 # np.random.seed(seed)
 
@@ -49,7 +49,8 @@ if algorithm == "ACA":
                                            tolerance, max_rank, min_pivot, green_kernel_power)
 elif algorithm == "ACA-GP":
     U,V,error,rank,Jk,Ik,history = aca.aca_gp(t_coord, s_coord, green_kernel_factor, \
-                                              tolerance, max_rank, min_pivot, green_kernel_power, Rank3SpecialTreatment=True)
+                                              tolerance, max_rank, min_pivot, green_kernel_power, \
+                                              Rank3SpecialTreatment=True, convex_hull_distance=("linear",1.))
 else:
     raise ValueError("Invalid algorithm")
 
