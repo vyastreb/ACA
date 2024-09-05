@@ -28,8 +28,7 @@ from typing import Any, Callable, Tuple
 from scipy.spatial import cKDTree
 import uuid
 import json
-
-
+import time
 
 def validate_field(name: str, default_value: Any, validator: Callable[[Any], bool]):
     def field_validator(value: Any):
@@ -73,7 +72,8 @@ class MainConfig:
     max_rank: int                       = validate_field('max_rank',                15,             lambda x: x > 0)
     kernel_decay: int                   = validate_field('kernel_decay',            1,              lambda x: x > 0)
     rank3treatment: bool                = validate_field('rank3treatment',          False,          lambda x: isinstance(x, bool))
-    convex_hull_dist: Tuple[str,float]  = validate_field('convex_hull_dist',       ("const",1),     lambda x: isinstance(x, tuple) and len(x) == 2 and isinstance(x[0], str) and isinstance(x[1], (int, float))
+    convex_hull_dist: Tuple[str,float]  = validate_field('convex_hull_dist',       ("const",1),     lambda x: isinstance(x, tuple) \
+                                                         and len(x) == 2 and isinstance(x[0], str) and isinstance(x[1], (int, float)))
     E: float                            = validate_field('E',                       1e3,            lambda x: x > 0)
     tol: float                          = validate_field('tol',                     1e-20,          lambda x: 0 < x < 0.1)
     min_pivot: float                    = validate_field('min_pivot',               1e-20,          lambda x: 0 < x < 0.1)
@@ -187,6 +187,7 @@ def performance_test(config: MainConfig):
         history (np.array): History of the ACA-GP algorithm.
     """
 
+    start_clouds = time.time()
     # Create two clouds of points
     t_coord = np.zeros((config.N,2))
     s_coord = np.zeros((config.M,2))
@@ -243,6 +244,7 @@ def performance_test(config: MainConfig):
         real_dist = true_distance_between_clouds(t_coord, t_coord_trial)
 
     t_coord = t_coord_trial
+    # print(f"Generated clouds in {time.time()-start_clouds:.2f} seconds")
 
     if config.Plot_cloud:
         fig,ax = plt.subplots()
@@ -278,17 +280,29 @@ def performance_test(config: MainConfig):
     # mean_s_coord = np.mean(s_coord,axis=0)
     # prime_dist = la.norm(mean_t_coord - mean_s_coord) - np.sqrt(1+config.xi**2)
 
+    start_full_matrix = time.time()
     # Compute the full matrix for the given clouds for comparison purposes
     full_matrix = np.zeros((config.N,config.M))
     for i in range(config.N):
         full_matrix[i] = aca.line_kernel(t_coord[i], s_coord, config.E, config.kernel_decay)
     norm_full_matrix = np.linalg.norm(full_matrix,"fro")
+    # print(f"Computed full matrix in {time.time()-start_full_matrix:.2f} seconds")
 
     # Compute the ACA-GP approximation
-    U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay, config.rank3treatment, config.convex_hull_dist)
+    start_aca_gp_computation = time.time()
+    U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, \
+                                                     config.min_pivot, config.kernel_decay, config.rank3treatment, config.convex_hull_dist)
+    acagp_time = time.time()-start_aca_gp_computation
+
     # Compute the ACA approximation for comparison purposes
-    Uc,Vc,_,rankc,_,_,_ = aca.aca(   t_coord, s_coord, config.E, config.tol, config.max_rank, config.min_pivot, config.kernel_decay)
+    start_aca_computation = time.time()
+    Uc,Vc,_,rankc,_,_,_ = aca.aca(   t_coord, s_coord, config.E, config.tol, config.max_rank, \
+                                  config.min_pivot, config.kernel_decay)
+    aca_time = time.time()-start_aca_computation
+
     rank = min(rank,rankc)
+
+    # print(f"Computed ACA-GP approximation in {time.time()-start_aca_computation:.2f} seconds")
 
     # To store relative errors: 
     # Frobebius norm of the difference between the full matrix and its low-rank approximation normalized by the Frobenius norm of the full matrix
@@ -298,10 +312,12 @@ def performance_test(config: MainConfig):
 
     # Construct SVD if needed and compute the error
     if config.ifSVD:
+        start_svd_computation = time.time()
         U_full, s_full, V_full = np.linalg.svd(full_matrix)
         for i in range(1,rank+1):
             approx_matrix = np.dot(U_full[:,:i],np.dot(np.diag(s_full[:i]),V_full[:i,:]))
             svd_error[i-1] = np.linalg.norm(approx_matrix - full_matrix,"fro")/norm_full_matrix
+        # print(f"Computed SVD approximation in {time.time()-start_svd_computation:.2f} seconds")
 
     # Compute relative errors for ACA and ACA-GP
     for i in range(1,rank+1):
@@ -310,7 +326,7 @@ def performance_test(config: MainConfig):
         aca_gp_approx_matrix = np.dot(U[:,:i],V[:i,:])
         aca_gp_error[i-1] = np.linalg.norm(aca_gp_approx_matrix - full_matrix,"fro")/norm_full_matrix
 
-    return real_dist, aca_error, aca_gp_error, svd_error, history[:,2], history[:,3]
+    return real_dist, aca_error, aca_gp_error, svd_error, history[:,2], history[:,3], acagp_time, aca_time
 
 def main(config: MainConfig):
     """
@@ -323,12 +339,16 @@ def main(config: MainConfig):
     ACA = []
     ACA_GP = []
     SVD = []
+    ACA_GP_time = []
+    ACA_time = []
     for i in range(config.Ntry):
-        dist, aca_error, aca_gp_error, svd_error, history, pivot = performance_test(config) 
+        dist, aca_error, aca_gp_error, svd_error, history, pivot, acagp_time, aca_time = performance_test(config)
         DIST.append(dist)
         ACA.append(aca_error)
         ACA_GP.append(aca_gp_error)
         SVD.append(svd_error)
+        ACA_GP_time.append(acagp_time)
+        ACA_time.append(aca_time)
         if (i+1) % 10 == 0:
             print("/ Completed {0:3d} out of {1:3d} trials".format(i+1,config.Ntry))
 
@@ -350,9 +370,9 @@ def main(config: MainConfig):
 
     if config.ifSVD:
         SVD = np.array(SVD)
-        np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP, SVD=SVD)
+        np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP, SVD=SVD, ACA_GP_time=ACA_GP_time, ACA_time=ACA_time)
     else:
-        np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP)
+        np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP, ACA_GP_time=ACA_GP_time, ACA_time=ACA_time)
     json_filename = filename.replace(".npz", ".json")
     with open(json_filename, 'w') as f:
         json.dump(config.get_json(), f, indent=4)
@@ -463,9 +483,11 @@ if __name__ == "__main__":
     seed = int(sys.argv[1])
     np.random.seed(seed)
 
-    Target_distances = [1, 1.5, 2, 2.5, 5]
+    # Target_distances = [1, 1.5, 2, 2.5, 5]
+    Target_distances = [1.5, 2, 5]
     Xi = [0.25, 0.5, 1]
     Convex_hull_distance_factors = [1] #, 2, 3, 4] #, 5, 6, 7, 8]
+    start_tests = time.time()
     for tdist in Target_distances:
         for xi_ in Xi:
             for rank3treatment_ in [True, False]:
@@ -477,10 +499,10 @@ if __name__ == "__main__":
                             target_distance = tdist,
                             target_distance_tol = 0.1, max_rank=15, 
                             kernel_decay=1, rank3treatment=rank3treatment_,
-                            convex_hull_dist=("const",ch_dist),
+                            convex_hull_dist=("linear",ch_dist),
                             E=1e3, tol = 1e-20, min_pivot=1e-20,
                             sigma=1., distribution_type="uniform",
-                            # FIXME: ifSVD should be True
+                            # FIXME: ifSVD should be True if you have not data, but it is the most time consuming
                             ifSVD=False, Plot_cloud=False, Plot=False,
                             filename_prefix="ACA_GP_data"
                         )
@@ -489,7 +511,7 @@ if __name__ == "__main__":
                         exit(1)
 
                     main(config)
-
+    print(f"Completed all tests in {time.time()-start_tests:.2f} seconds")
 
 
     # # Target_distances = [1, 1.5, 2, 2.5, 5]
