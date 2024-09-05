@@ -145,6 +145,14 @@ def find_closest_point(s_coord, t_center, Jk):
     j_k = np.argmin(distances)
     return np.arange(len(s_coord))[mask][j_k]
 
+def find_farhest_point(s_coord, t_center, Jk):
+    mask = np.ones(len(s_coord), dtype=bool)
+    mask[Jk] = False
+    distances = np.linalg.norm(s_coord[mask] - t_center, axis=1)
+    # return np.argmax(distances)
+    j_k = np.argmax(distances)
+    return np.arange(len(s_coord))[mask][j_k]
+
 def find_average_point(s_coord, t_center, Jk):
     mask = np.ones(len(s_coord), dtype=bool)
     mask[Jk] = False
@@ -274,6 +282,46 @@ def aca(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower):
 ##           ACA-GP algorithm            ##
 ###########################################
 
+# A fast version of the geometric pivot selection
+def geometric_pivot_selection(s_coord, Jk, x0, x1, y0, y1, ranks, convex_hull_distance):
+    m = s_coord.shape[0]
+
+    # Boolean mask to exclude points in Jk
+    mask = np.ones(m, dtype=bool)
+    mask[Jk] = False
+    
+    # Compute pairwise distances for the valid (non-Jk) points
+    selected_coords = s_coord[Jk]
+    diff = s_coord[:, np.newaxis, :] - selected_coords
+    distances_to_Jk = np.linalg.norm(diff, axis=2)  # Pairwise distances to points in Jk
+
+    # Sum distances for each point
+    inv_distances = np.sum(len(Jk) / distances_to_Jk, axis=1)
+    inv_distances[~mask] = 1e30  # Assign large distance to points in Jk
+
+    # Compute minimum distance to convex hull
+    min_dist_x = np.minimum(np.abs(x1 - s_coord[:, 0]), np.abs(x0 - s_coord[:, 0]))
+    min_dist_y = np.minimum(np.abs(y1 - s_coord[:, 1]), np.abs(y0 - s_coord[:, 1]))
+    min_distance_to_convex_hull = np.minimum(min_dist_x, min_dist_y)
+
+    # Adjust inv_distances based on convex hull proximity
+    non_zero_convex_hull_dist = min_distance_to_convex_hull > 0
+    if convex_hull_distance[0] == "const":
+        inv_distances[non_zero_convex_hull_dist] += convex_hull_distance[1] / min_distance_to_convex_hull[non_zero_convex_hull_dist]
+    elif convex_hull_distance[0] == "linear":
+        inv_distances[non_zero_convex_hull_dist] += convex_hull_distance[1] * ranks / min_distance_to_convex_hull[non_zero_convex_hull_dist]
+    
+    # Handle points on the convex hull (min_distance_to_convex_hull == 0)
+    inv_distances[~non_zero_convex_hull_dist] += 1e30
+
+    # Find the point with the minimum inv_distance
+    j_k = np.argmin(inv_distances)
+    
+    return j_k
+
+
+        
+
 # FIXME numba should be integrated
 # @jit(nopython=True,parallel=True)
 def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3SpecialTreatment, convex_hull_distance):
@@ -366,17 +414,18 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3Speci
     M_norm = R_norm 
     history[0] = np.array([R_norm, M_norm, R_norm/M_norm, pivot])
 
+    # Approximation of a convex hull
+    x0 = np.min(s_coord[:,0])
+    x1 = np.max(s_coord[:,0])
+    y0 = np.min(s_coord[:,1])
+    y1 = np.max(s_coord[:,1])
+
     ranks = 1
     # Main loop
     while R_norm > tol * M_norm and ranks < max_possible_rank:
-        # Approximation of a convex hull
-        x0 = np.min(s_coord[:,0])
-        x1 = np.max(s_coord[:,0])
-        y0 = np.min(s_coord[:,1])
-        y1 = np.max(s_coord[:,1])
+        # Find the next pivot using the geometric pivot selection
+        # j_k = geometric_pivot_selection(s_coord, Jk, x0, x1, y0, y1, ranks, convex_hull_distance)
 
-
-        # V1
         inv_distances = np.zeros(m)
         for i in range(m):
             if i in Jk:
@@ -395,7 +444,10 @@ def aca_gp(t_coord, s_coord, Estar, tol, max_rank, min_pivot, kpower, Rank3Speci
                     elif convex_hull_distance[0] == "linear":
                         inv_distances[i] += convex_hull_distance[1]*(ranks)/min_distance_to_convex_hull # Note that ranks = k-1
         j_k = np.argmin(inv_distances)
+
         if Rank3SpecialTreatment and ranks == 2:
+            # j_k = find_average_point(s_coord, t_center, Jk)
+            # j_k = find_farhest_point(s_coord, t_center, Jk)
             j_k = find_average_point(s_coord, t_center, Jk)
             
         Jk[ranks] = j_k

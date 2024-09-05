@@ -293,16 +293,17 @@ def performance_test(config: MainConfig):
     U, V, error, rank, Jk, Ik, history  = aca.aca_gp(t_coord, s_coord, config.E, config.tol, config.max_rank, \
                                                      config.min_pivot, config.kernel_decay, config.rank3treatment, config.convex_hull_dist)
     acagp_time = time.time()-start_aca_gp_computation
+    # print(f"Computed ACA-GP approximation in {acagp_time:.2f} seconds")
 
     # Compute the ACA approximation for comparison purposes
     start_aca_computation = time.time()
     Uc,Vc,_,rankc,_,_,_ = aca.aca(   t_coord, s_coord, config.E, config.tol, config.max_rank, \
                                   config.min_pivot, config.kernel_decay)
     aca_time = time.time()-start_aca_computation
+    # print(f"Computed ACA approximation in {aca_time:.2f} seconds")
 
     rank = min(rank,rankc)
 
-    # print(f"Computed ACA-GP approximation in {time.time()-start_aca_computation:.2f} seconds")
 
     # To store relative errors: 
     # Frobebius norm of the difference between the full matrix and its low-rank approximation normalized by the Frobenius norm of the full matrix
@@ -311,13 +312,15 @@ def performance_test(config: MainConfig):
     svd_error = np.zeros(rank)
 
     # Construct SVD if needed and compute the error
+    svd_time = 0
     if config.ifSVD:
         start_svd_computation = time.time()
         U_full, s_full, V_full = np.linalg.svd(full_matrix)
+        svd_time = time.time()-start_svd_computation
+        # print(f"Computed SVD approximation in {time.time()-start_svd_computation:.2f} seconds")
         for i in range(1,rank+1):
             approx_matrix = np.dot(U_full[:,:i],np.dot(np.diag(s_full[:i]),V_full[:i,:]))
             svd_error[i-1] = np.linalg.norm(approx_matrix - full_matrix,"fro")/norm_full_matrix
-        # print(f"Computed SVD approximation in {time.time()-start_svd_computation:.2f} seconds")
 
     # Compute relative errors for ACA and ACA-GP
     for i in range(1,rank+1):
@@ -326,7 +329,7 @@ def performance_test(config: MainConfig):
         aca_gp_approx_matrix = np.dot(U[:,:i],V[:i,:])
         aca_gp_error[i-1] = np.linalg.norm(aca_gp_approx_matrix - full_matrix,"fro")/norm_full_matrix
 
-    return real_dist, aca_error, aca_gp_error, svd_error, history[:,2], history[:,3], acagp_time, aca_time
+    return real_dist, aca_error, aca_gp_error, svd_error, history[:,2], history[:,3], acagp_time, aca_time, svd_time
 
 def main(config: MainConfig):
     """
@@ -341,14 +344,16 @@ def main(config: MainConfig):
     SVD = []
     ACA_GP_time = []
     ACA_time = []
+    SVD_time = []
     for i in range(config.Ntry):
-        dist, aca_error, aca_gp_error, svd_error, history, pivot, acagp_time, aca_time = performance_test(config)
+        dist, aca_error, aca_gp_error, svd_error, history, pivot, acagp_time, aca_time, svd_time = performance_test(config)
         DIST.append(dist)
         ACA.append(aca_error)
         ACA_GP.append(aca_gp_error)
         SVD.append(svd_error)
         ACA_GP_time.append(acagp_time)
         ACA_time.append(aca_time)
+        SVD_time.append(svd_time)
         if (i+1) % 10 == 0:
             print("/ Completed {0:3d} out of {1:3d} trials".format(i+1,config.Ntry))
 
@@ -370,7 +375,7 @@ def main(config: MainConfig):
 
     if config.ifSVD:
         SVD = np.array(SVD)
-        np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP, SVD=SVD, ACA_GP_time=ACA_GP_time, ACA_time=ACA_time)
+        np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP, SVD=SVD, ACA_GP_time=ACA_GP_time, ACA_time=ACA_time, SVD_time=SVD_time)
     else:
         np.savez(filename, DIST=DIST, ACA=ACA, ACA_GP=ACA_GP, ACA_GP_time=ACA_GP_time, ACA_time=ACA_time)
     json_filename = filename.replace(".npz", ".json")
@@ -488,18 +493,19 @@ if __name__ == "__main__":
     Xi = [0.25, 0.5, 1]
     Convex_hull_distance_factors = [1] #, 2, 3, 4] #, 5, 6, 7, 8]
     start_tests = time.time()
+    convex_hull_dist_type = "const" # "linear"
     for tdist in Target_distances:
         for xi_ in Xi:
             for rank3treatment_ in [True, False]:
                 for ch_dist in Convex_hull_distance_factors:
                     try:
-                        print("Running with parameters: ", tdist, xi_, rank3treatment_)
+                        print(f"> Running with parameters: dist={tdist:.2f}, xi={xi_:.2f}, rank3treatment={rank3treatment_}, convex_hull_dist type={convex_hull_dist_type}, factor={ch_dist:.2f}")
                         config = MainConfig(
-                            N=200, M=300, xi=xi_, Ntry=500,
+                            N=200, M=300, xi=xi_, Ntry=10,
                             target_distance = tdist,
                             target_distance_tol = 0.1, max_rank=15, 
                             kernel_decay=1, rank3treatment=rank3treatment_,
-                            convex_hull_dist=("linear",ch_dist),
+                            convex_hull_dist=(convex_hull_dist_type,ch_dist),
                             E=1e3, tol = 1e-20, min_pivot=1e-20,
                             sigma=1., distribution_type="uniform",
                             # FIXME: ifSVD should be True if you have not data, but it is the most time consuming
