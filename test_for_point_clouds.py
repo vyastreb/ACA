@@ -274,6 +274,7 @@ def performance_test(config: MainConfig):
         ax.add_patch(rect3)
 
         plt.legend()
+        fig.savefig("clouds.pdf")
         # plt.show()
     # Potentially not needed
     # mean_t_coord = np.mean(t_coord,axis=0)
@@ -493,17 +494,19 @@ if __name__ == "__main__":
     Xi = [0.25, 0.5, 1]
     Convex_hull_distance_factors = [1] #, 2, 3, 4] #, 5, 6, 7, 8]
     start_tests = time.time()
-    convex_hull_dist_type = "const" # "linear"
+    convex_hull_dist_type = "linear" # "const" or "linear"
+    Rank3 = [True] #[True, False]
+
     for tdist in Target_distances:
         for xi_ in Xi:
-            for rank3treatment_ in [True, False]:
+            for rank3treatment_ in Rank3:
                 for ch_dist in Convex_hull_distance_factors:
                     try:
                         print(f"> Running with parameters: dist={tdist:.2f}, xi={xi_:.2f}, rank3treatment={rank3treatment_}, convex_hull_dist type={convex_hull_dist_type}, factor={ch_dist:.2f}")
                         config = MainConfig(
-                            N=200, M=300, xi=xi_, Ntry=10,
+                            N=200, M=300, xi=xi_, Ntry=50,
                             target_distance = tdist,
-                            target_distance_tol = 0.1, max_rank=15, 
+                            target_distance_tol = 0.1, max_rank=5, 
                             kernel_decay=1, rank3treatment=rank3treatment_,
                             convex_hull_dist=(convex_hull_dist_type,ch_dist),
                             E=1e3, tol = 1e-20, min_pivot=1e-20,
@@ -519,31 +522,3 @@ if __name__ == "__main__":
                     main(config)
     print(f"Completed all tests in {time.time()-start_tests:.2f} seconds")
 
-
-    # # Target_distances = [1, 1.5, 2, 2.5, 5]
-    # # Xi = [0.25, 0.5, 1]
-    # Target_distances = [1.5]
-    # Xi = [0.25]
-    # Convex_hull_distance_factors = [1, 2, 3, 4] #, 5, 6, 7, 8]
-    # for tdist in Target_distances:
-    #     for xi_ in Xi:
-    #         for rank3treatment_ in [True]: #[True, False]:
-    #             for ch_dist in Convex_hull_distance_factors:
-    #                 try:
-    #                     print("Running with parameters: ", tdist, xi_, rank3treatment_)
-    #                     config = MainConfig(
-    #                         N=200, M=300, xi=xi_, Ntry=200,
-    #                         target_distance = tdist,
-    #                         target_distance_tol = 0.1, max_rank=15, 
-    #                         kernel_decay=1, rank3treatment=rank3treatment_,
-    #                         convex_hull_dist_factor=ch_dist,
-    #                         E=1e3, tol = 1e-20, min_pivot=1e-20,
-    #                         sigma=1., distribution_type="uniform",
-    #                         ifSVD=False, Plot_cloud=False, Plot=True,
-    #                         filename_prefix="ACA_GP_data"
-    #                     )
-    #                 except ValueError as e:
-    #                     print(f"Input validation failed: {e}")
-    #                     exit(1)
-
-    #                 main(config)

@@ -8,16 +8,21 @@
 """
 
 import numpy as np
-import os
+import os, sys
 import matplotlib.pyplot as plt
 import json
 from collections import defaultdict
 
 # Specify the folder name
-folder_name = "FullTestCycle_gamma_linear/"  # Change this to the folder you want to process
-folder_name = "TimeChecks4/"  # Change this to the folder you want to process
-prefix = "adhoc"
+# folder_name = "FullTestCycle_gamma_linear/"  # Change this to the folder you want to process
+# folder_name = "TimeChecks10/"  # Change this to the folder you want to process
+folder_name = sys.argv[1]+"/"
 adhoc = True
+
+if adhoc:
+    prefix = "Adhoc"
+else:
+    prefix = "NoAdhoc"
 
 # Update the directory paths
 plt.rcParams.update({
@@ -162,7 +167,7 @@ for dist, data_group in data_by_dist.items():
 
     # Save the figure in the provided folder
     unique_id = fname.split("_ID_")[1].split(".")[0]
-    figure_name = os.path.join(folder_name, f"ACA_GP_error_{prefix}_Dist_{dist:.1f}_grouped_ID_{unique_id}")
+    figure_name = os.path.join(folder_name, f"ACA_GP_error_{prefix}_Dist_{dist:.1f}")
     fig.savefig(figure_name + ".pdf", bbox_inches='tight')
     fig.savefig(figure_name + ".pgf", bbox_inches='tight')
 
@@ -175,6 +180,7 @@ for dist, data_group in data_by_dist.items():
 #######################
 
     fig, axes = plt.subplots(1, 3, figsize=(6, 3), sharey=True)  # 1 row, 3 columns, sharing y-axis
+    plt.subplots_adjust(wspace=-0.1)  # Reduce the width space between subplots
 
     # Create empty plots first, then fill them with data corresponding to each xi
     for fname, json_data, num_data in data_group:
@@ -198,13 +204,21 @@ for dist, data_group in data_by_dist.items():
 
         ax.fill_between(ranks, 10**(accuracy_gain_mean_log + accuracy_gain_std_log), 10**(accuracy_gain_mean_log - accuracy_gain_std_log), color="g", alpha=0.2)
         ax.plot(ranks, 10**accuracy_gain_mean_log, "o-", markersize=6, markeredgewidth=0.5, color="g", markeredgecolor='k', label="ACA-GP", zorder=3)
-        ax.axhline(y=10**average_over_whole_ranks_log, color='k', linestyle='--', label='Average')
+        ax.axhline(y=10**average_over_whole_ranks_log, color='k', linestyle='--', label=r'Mean $g$, $k \le 15$', zorder=4)
+
+        # Plot average gain over first 5 ranks
+        average_over_first_5_ranks_log = np.mean(accuracy_gain_log[:, :5], axis=1)
+        average_over_first_5_ranks_log_mean = np.mean(average_over_first_5_ranks_log)
+        x = np.linspace(1, 5.2, 2)
+        y = 10**average_over_first_5_ranks_log_mean * np.ones(x.shape[0])
+        ax.plot(x, y, linestyle="-",color="r", label=r"Mean $g$, $k \le 5$", zorder=5)
+
 
         ax.set_title(r"$\xi = {0:.2f}$".format(xi), fontsize=10)
         ax.set_xlabel("Approximation rank, $k$")
         
         if xi == 0.25:
-            ax.set_ylabel(r"Accuracy gain, $\mathrm{Er}_{\mathrm{ACA}} / \mathrm{Er}_{\mathrm{ACA-GP}}$")
+            ax.set_ylabel(r"Accuracy gain, $g = \frac{\mathrm{Er}_{\mathrm{ACA}} }{ \mathrm{Er}_{\mathrm{ACA-GP}}}$")
         else:
             ax.tick_params(labelleft=False)
 
@@ -213,13 +227,13 @@ for dist, data_group in data_by_dist.items():
         ax.set_ylim(0., 5)
 
         if xi == 1.0:
-            ax.legend(loc='best', fontsize=8)
+            ax.legend(loc='upper right', fontsize=8)
 
     plt.tight_layout(rect=[0, 0, 1, 0.92])
     fig.suptitle(f"Distance = ${dist:.1f} \\pm 0.1$", fontsize=10, y=0.95,x=0.1)
 
     # Save the accuracy gain figure
-    figure_name = os.path.join(folder_name, f"ACA_GP_accuracy_{prefix}_Dist_{dist:.1f}_grouped_ID_{unique_id}")
+    figure_name = os.path.join(folder_name, f"ACA_GP_accuracy_{prefix}_Dist_{dist:.1f}")
     fig.savefig(figure_name + ".pdf", bbox_inches='tight')
     fig.savefig(figure_name + ".pgf", bbox_inches='tight')
 

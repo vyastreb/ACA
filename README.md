@@ -24,17 +24,20 @@ Usage of the ACA algorithm (see `test.py`)
 import numpy as np
 import ACAs as aca
 
+# Uncomment the two following lines to use a fixed seed
+seed = 124  
+np.random.seed(seed)
+
 # Create two separate clouds of points
 algorithm = "ACA-GP" # "ACA" or "ACA-GP"
 N = 200
 M = 300
 t_coord = np.random.rand(N, 2)
 s_coord = np.random.rand(M, 2)
-t_coord += np.array([1.5,0])
+Delta_X = 1.5
+Delta_Y = .5
+t_coord += np.array([Delta_X,Delta_Y])
 
-# Uncomment the two following lines to use a fixed seed
-# seed = 124
-# np.random.seed(seed)
 
 # Set low-rank approximation parameters
 tolerance = 1e-3
@@ -50,9 +53,40 @@ if algorithm == "ACA":
 elif algorithm == "ACA-GP":
     U,V,error,rank,Jk,Ik,history = aca.aca_gp(t_coord, s_coord, green_kernel_factor, \
                                               tolerance, max_rank, min_pivot, green_kernel_power, \
-                                              Rank3SpecialTreatment=True, convex_hull_distance=("linear",1.))
+                                              Rank3SpecialTreatment=True, convex_hull_distance=("const",1.))
 else:
     raise ValueError("Invalid algorithm")
+
+
+## BO plot
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+# Keep only positive arguments of Jk
+Jk = Jk[:rank]
+dtext = 0.01
+fig,ax = plt.subplots()
+ax.set_aspect('equal', 'box')
+plt.scatter(t_coord[:,0],t_coord[:,1],s=2.5,c="r",label="t_coord",alpha=0.1)
+plt.scatter(s_coord[:,0],s_coord[:,1],s=2.5,c="b",label="s_coord",alpha=0.1)
+for j in range(len(Jk)):
+    plt.plot(s_coord[Jk[j],0],s_coord[Jk[j],1],"o",markersize=2.5,c="k",zorder=10)
+    plt.text(s_coord[Jk[j],0]+dtext,s_coord[Jk[j],1]+dtext,f"{j+1}",fontsize=12)
+for i in range(len(Jk)):
+    plt.plot(t_coord[Ik[i],0],t_coord[Ik[i],1],"o",markersize=2.5,c="k",zorder=10)
+    plt.text(t_coord[Ik[i],0]+dtext,t_coord[Ik[i],1]+dtext,f"{i+1}",fontsize=12)
+    
+rect2 = patches.Rectangle((0,0), 1, 1,linewidth=1,edgecolor='#990000',linestyle="dashed",facecolor='none', zorder=3) 
+ax.add_patch(rect2)
+
+rect3 = patches.Rectangle((Delta_X,Delta_Y), 1, 1,linewidth=1,edgecolor='#990000',linestyle="dashed",facecolor='none', zorder=3)
+ax.add_patch(rect3)
+
+plt.legend()
+plt.show()
+fig.savefig(f"{algorithm}_classical.png", dpi=300)
+## EO plot
+
 
 # Compute the approximated matrix
 approx_matrix = np.dot(U,V)
