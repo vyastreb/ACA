@@ -1,6 +1,6 @@
 # Adaptive Cross Approximation: ACA and ACA-GP
 
-This repository contains the implementation of the Adaptive Cross Approximation (ACA) and the Adaptive Cross Approximation with Geometrical Pivot selection (ACA-GP) algorithms. The ACA algorithm is a low-rank matrix approximation algorithm that is particularly well-suited for matrices that arise in the context of integral equations. The ACA-GP algorithm is a variant of the ACA algorithm that is designed to enhance the purely algebraic ACA algorithm by incorporating a geometrical pivot selection strategy. The ACA-GP algorithm is only marginally more expensive but constantly ensures a better accuracy than the classical ACA. 
+This repository contains the implementation of the Adaptive Cross Approximation (ACA) and the Adaptive Cross Approximation with Geometrical Pivot selection (ACA-GP) algorithms. The ACA algorithm is a low-rank matrix approximation algorithm that is particularly well-suited for matrices that arise in the context of integral equations. The ACA-GP algorithm is a variant of the ACA algorithm that is designed to enhance the purely algebraic ACA algorithm by incorporating a geometrical pivot selection strategy. The ACA-GP algorithm can be marginally more computationally costly but constantly outperforms the classical ACA both in average accuracy and in the accuracy dispersion.
 
 **License:** BSD 3-Clause
 
@@ -86,11 +86,13 @@ print(f" True relative error:   {aca_error:<10.2e}")
 
 ```
 
-## Other tests
+## Other scripts
 
-An extended version of the test is available in `extended_test.py`.
+Apart from the ACA library, the repository contains a few other helpful scripts.
 
-Script `test_for_point_clouds.py` contains an elaborated test of the ACA and ACA-GP algorithms for two rectangular clouds of a given aspect ratio and rotated one with respect to another by a random angle. The user can define the target distance between these clouds and define the type of points' distribution (uniform or normal). The script computes ACA and ACA-GP low-rank approximations and computes an SVD for comparison.
++ An extended version of the test is available in `extended_test.py`.
++ Script `test_for_point_clouds.py` contains an elaborated test of the ACA and ACA-GP algorithms for two rectangular clouds of a given aspect ratio and rotated one with respect to another by a random angle. The user can define the target distance between these clouds and define the type of points' distribution (uniform or normal). The script computes ACA and ACA-GP low-rank approximations and computes an SVD for comparison.
++ Script `Genetic_Search_For_best_skeleton.py` uses library `ACA_genetic.py` to generate the best skeleton for the given interaction matrix: this is computationally expensive because it explores all possible skeletons.
 
 ## References
 

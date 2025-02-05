@@ -7,6 +7,7 @@
     Affiliation: CNRS, Mines Paris, PSL University, Evry/Paris, France
     Date: May 2024 - Feb 2025
     License: BSD 3-Clause
+    AI-LLM assistance: Claude (Claude 3.5 Sonnet, Anthropic) and GPT4o (OpenAI)
 """
 
 import numpy as np
