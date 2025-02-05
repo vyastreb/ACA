@@ -2,82 +2,53 @@ import numpy as np
 import time
 import ACAs as aca
 
-# Uncomment the two following lines to use a fixed seed
+# Parameters
+algorithm = "ACA-GP"  # "ACA" or "ACA-GP"
 seed = 128
 np.random.seed(seed)
 
-# Create two separate clouds of points
-algorithm = "ACA-GP" # "ACA" or "ACA-GP"
-N = 300
-M = 400
-central_fraction = 0.1 # For ACA-GP
-t_coord = np.random.rand(N, 2)
-s_coord = np.random.rand(M, 2)
-Delta_X = 1.5
-Delta_Y = .5
-t_coord += np.array([Delta_X,Delta_Y])
+# Number of points
+N = 1000
+M = 1500
 
-
-# Set low-rank approximation parameters
-tolerance = 1e-2
+# Low-rank approximation parameters
+tolerance = 1e-3
 min_pivot = 1e-12
-max_rank = min(min(N, M),20)
-green_kernel_power = 1
-green_kernel_factor = 1
+max_rank = min(min(N, M), 15)
+Green_kernel_power = 1
+Green_kernel_factor = 1
+# ACA-GP specific parameters
+central_fraction = 0.1
+square_shape = True # If True, the shape of the target and source clouds should be square-like, if False, the clouds can have arbitrary shape.
 
-# Run the ACA algorithm
+# Create clouds of points
+x_coord = np.random.rand(N, 2) + np.array([1.5, 0.5])
+y_coord = np.random.rand(M, 2)
+
+# Run ACA algorithm
+start_time = time.time()
 if algorithm == "ACA":
-    U,V,error,rank,Jk,Ik,history = aca.aca(t_coord, s_coord, green_kernel_factor, tolerance, \
-                                           max_rank, min_pivot, green_kernel_power)
+    U, V, error, rank, _, _, _ = \
+        aca.aca(x_coord, y_coord, tolerance, max_rank, min_pivot, Green_kernel_factor, Green_kernel_power)
 elif algorithm == "ACA-GP":
-    U,V,error,rank,Jk,Ik,history = aca.aca_gp(t_coord, s_coord, green_kernel_factor, tolerance, \
-                                              max_rank, min_pivot, central_fraction, green_kernel_power)
+    U, V, error, rank, _, _, _, _, _ = \
+        aca.aca_gp(x_coord, y_coord, tolerance, max_rank, min_pivot, Green_kernel_factor, Green_kernel_power,
+                    central_fraction, square_shape)
 else:
     raise ValueError("Invalid algorithm")
+end_time = time.time()
 
+# Compute approximation and error
+approx_matrix = np.dot(U, V)
+full_matrix = np.array([aca.line_kernel(x, y_coord, Green_kernel_factor, Green_kernel_power) for x in x_coord])
+norm_full_matrix = np.linalg.norm(full_matrix, "fro")
+aca_error = np.linalg.norm(approx_matrix - full_matrix, "fro") / norm_full_matrix
 
-## BO plot
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-
-# Keep only positive arguments of Jk
-dtext = 0.01
-fig,ax = plt.subplots()
-ax.set_aspect('equal', 'box')
-plt.scatter(t_coord[:,0],t_coord[:,1],s=2.5,c="r",label="t_coord",alpha=0.1)
-plt.scatter(s_coord[:,0],s_coord[:,1],s=2.5,c="b",label="s_coord",alpha=0.1)
-for j in range(len(Jk)):
-    plt.plot(s_coord[Jk[j],0],s_coord[Jk[j],1],"o",markersize=2.5,c="k",zorder=10)
-    plt.text(s_coord[Jk[j],0]+dtext,s_coord[Jk[j],1]+dtext,f"{j+1}",fontsize=12)
-for i in range(len(Jk)):
-    plt.plot(t_coord[Ik[i],0],t_coord[Ik[i],1],"o",markersize=2.5,c="k",zorder=10)
-    plt.text(t_coord[Ik[i],0]+dtext,t_coord[Ik[i],1]+dtext,f"{i+1}",fontsize=12)
-    
-rect2 = patches.Rectangle((0,0), 1, 1,linewidth=1,edgecolor='#990000',linestyle="dashed",facecolor='none', zorder=3) 
-ax.add_patch(rect2)
-
-rect3 = patches.Rectangle((Delta_X,Delta_Y), 1, 1,linewidth=1,edgecolor='#990000',linestyle="dashed",facecolor='none', zorder=3)
-ax.add_patch(rect3)
-
-plt.legend()
-plt.show()
-fig.savefig(f"{algorithm}_classical.png", dpi=300)
-## EO plot
-
-
-# Compute the approximated matrix
-approx_matrix = np.dot(U,V)
-
-# Compute the error
-full_matrix = np.zeros((N, M))
-for i in range(N):
-    full_matrix[i] = aca.line_kernel(t_coord[i], s_coord, green_kernel_factor, green_kernel_power)
-norm_full_matrix = np.linalg.norm(full_matrix,"fro")
-aca_error = np.linalg.norm(approx_matrix - full_matrix,"fro")/norm_full_matrix
-
-print("/ Algorithm: {0}".format(algorithm))
-print(" Approximation rank: {0:2d} ".format(rank+1))
-print(" Storage fraction:   {0:.2f} ".format((rank+1)*(N+M)/(N*M)))
-print(" Relative error:     {0:.2e} ".format(aca_error))
-print(" Approximate error:  {0:.2e} < {1:.2e}".format(error, tolerance))
-
+# Print results
+print(f"/ Algorithm: {algorithm} for {N} x {M} clouds")
+print(f" Time (s):              {end_time - start_time:<10.4f}")
+print(f" Approximation rank:    {rank+1:<10d}")
+print(f" Storage fraction (%):  {(rank+1)*(N+M)/(N*M)*100:<10.2f}")
+print(f" Requested tolerance:   {tolerance:<10.2e}")
+print(f" Approximate error:     {error:<10.2e}")
+print(f" True relative error:   {aca_error:<10.2e}")
