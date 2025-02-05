@@ -10,7 +10,7 @@ This repository contains the implementation of the Adaptive Cross Approximation 
 
 For two separate randomly oriented clouds of points the ACA-GP algorithm is on average 2-3 times more accurate than the classical ACA algorithm.
 
-<img src="ACA_GP_vs_ACA.png" width="50%" alt="Error in low rank approximation of the ACA-GP with respect to the ACA and SVD"/> <img src="ACA_GP_gain.png" width="50%" alt="Gain in accuracy with respect to the SVD of the ACA-GP compared to the ACA"/>
+<div><img src="ACA_GP_vs_ACA.png" width="45%" alt="Error in low rank approximation of the ACA-GP with respect to the ACA and SVD"/> <img src="ACA_GP_gain.png" width="45%" alt="Gain in accuracy with respect to the SVD of the ACA-GP compared to the ACA"/></div>
 
 
 ## Usage
