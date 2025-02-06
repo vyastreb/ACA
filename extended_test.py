@@ -13,7 +13,6 @@ import numpy as np
 import time
 import ACAs as aca
 
-
 # Parameters
 algorithm = "ACA-GP" # "ACA" or "ACA-GP"
 seed = 128
@@ -116,8 +115,8 @@ if plot_clouds:
         circle_y = plt.Circle((y_coord[Jk[0],0], y_coord[Jk[0],1]), central_fraction * diam_y,
                              fill=False, linestyle='--', color='b', alpha=0.5,label="Central subset Y cloud")
     
-    ax.add_patch(circle_x)
-    ax.add_patch(circle_y)
+        ax.add_patch(circle_x)
+        ax.add_patch(circle_y)
 
     plt.legend()
     plt.show()
