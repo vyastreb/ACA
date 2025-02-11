@@ -103,7 +103,7 @@ Apart from the ACA library, the repository contains a few other helpful scripts.
 
 ## References
 
-Vladislav A. Yastrebov. ACA-GP: Adaptive Cross Approximation with a Geometrical Pivot Choice. arXiv preprint [arXiv:??.??](https://arxiv.org/abs/??.??), 2024.
+Vladislav A. Yastrebov, Camille Noûs. **Adaptive Cross Approximation with a Geometrical Pivot Choice: ACA-GP Method**. arXiv preprint [arXiv:2502.03886](https://arxiv.org/abs/2502.03886), 2025.
 
 
 
